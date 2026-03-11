@@ -1,7 +1,2 @@
 # EE_598_project
-The current plan for this project is to contribute to [cslib](https://github.com/leanprover/cslib). More specifically, I'd like to get a better feel for automation by working on simp sets and/or grind sets, perhaps as a part of [issue 308](https://github.com/leanprover/cslib/issues/308). "Contributing to cslib" is a super broad goal, so to keep myself honest, I'll consider this project a success iff at the end of the quarter one of the following is true
-- I have resolved issue [issue 308](https://github.com/leanprover/cslib/issues/308) or made significant progress on it, an example of significant progress would be having an unresolved pull request that adds a grind set with demonstrated function (it makes some proofs shorter).
-- I have resolved another issue of similar scale.
-- I have contributed to cslib by adding a new algorithm.
-
-I don't yet have a very good understanding of what's going on in cslib, or how difficult it is to contribute to it, so I'll update these goals as my understanding grows.
+I made a pull request to CSLib with some initial work on adding the `automata` grind set. Unfortunately, since grind sets are relatively new, they are not yet compatible with `grind_lint`. This is an issue for CSLib, since they use `grind_lint` to sanity check their grind definitions. Therefore, I am moving away from contributing to CSLib for the project, and am instead attempting to write the `grind_attr_lint` that would allow CSLib to take my changes and keep their tests running properly. If all goes well, I'll present my repo to CSLib and ask if they want to use it to make my previous work viable again, but I don't expect them to (since this should really be a change to Lean at its core, not something tacked on after the fact).
