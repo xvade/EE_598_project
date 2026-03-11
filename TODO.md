@@ -1,3 +1,7 @@
 What needs to be done:
-- Await response on [issue 308](https://github.com/leanprover/cslib/issues/308).
-- Read cslib over and familiarize myself with its structure, conventions, and state. Write a little blurb about it in this repo's README.md.
+- Finish the design of grind_attr_lint check
+ - Figure out how grind attributes are stored
+ - Make syntax
+ - Make logic (this should be pretty easy, it should be a lot like the existing code for grind_lint)
+- If there is time:
+ - Design grind_attr_lint skip etc
