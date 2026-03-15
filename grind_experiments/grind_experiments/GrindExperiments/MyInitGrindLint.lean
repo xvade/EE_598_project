@@ -16,7 +16,7 @@ open Parser Tactic Grind
 
 
 -- syntax (name := grindAttrLintCheck) "#grind_attr_lint" ppSpace &"check" (ppSpace configItem)* ppSpace grindAttrName : command
-syntax (name := grindAttrLintCheck) "#grind_attr_lint" ppSpace &"check" (ppSpace configItem)* (ppSpace "in" (ppSpace &"module")? ident+)? : command
+syntax (name := grindAttrLintCheck) "#grind_attr_lint" ppSpace &"check" (ppSpace configItem)* (ppSpace ident)+ (ppSpace "in" (ppSpace &"module")? ident+)? : command
 
 
 end Lean.Grind

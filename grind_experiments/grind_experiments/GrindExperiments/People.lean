@@ -20,4 +20,6 @@ theorem steve_is_the_one' (x : Person) (hx : on_right mary x) : x = steve := by 
 
 @[my_grind_attr .]
 theorem the_one_is_steve (x : Person) (hx : on_right mary x) : steve = x := by sorry
+
+
 end mod

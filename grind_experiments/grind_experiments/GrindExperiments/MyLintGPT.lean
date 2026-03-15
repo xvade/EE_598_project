@@ -1,13 +1,11 @@
--- module
--- prelude
--- public import Lean.Elab.Command
 import Lean.Elab.Command
 import Init.Grind.Lint
 import Lean.Elab.Tactic.Grind.Config
 import Lean.Meta.Tactic.TryThis
 import GrindExperiments.MyInitGrindLint
-namespace Lean.Elab.Tactic.Grind
 
+namespace Lean.Elab.Tactic.Grind
+open Command Meta Grind
 initialize mySkipExt : SimplePersistentEnvExtension Name NameSet ←
   registerSimplePersistentEnvExtension {
     addEntryFn := (·.insert)
@@ -132,42 +130,95 @@ def getTheorems (prefixes? : Option (Array Name)) (inModule : Bool) : CoreM (Lis
       unless keep do return none
       return some declName
 
--- @[command_elab Lean.Grind.grindAttrLintCheck]
--- def myElabGrindLintCheck : CommandElab := fun stx => liftTermElabM <| withTheReader Core.Context (fun c => { c with maxHeartbeats := 0 }) do
---   Tactic.TryThis.addSuggestion stx { suggestion := .string "hello" }
---   let `(#grind_attr_lint check $[$items:configItem]* $[in $[module%$m?]? $ids?:ident*]?) := stx | throwUnsupportedSyntax
---   let config ← mkConfig items
---   let params ← mkParams config
---   let prefixes? := ids?.map (·.map (·.getId))
---   let inModule := m? matches some (some _)
---   let decls ← getTheorems prefixes? inModule
---   let decls := decls.toArray.qsort Name.lt
---   let mut problematicTheorems := #[]
---   for declName in decls do
---     try
---       if (← analyzeEMatchTheorem declName params) then
---         problematicTheorems := problematicTheorems.push declName
---     catch e =>
---       logError m!"{declName} failed with {e.toMessageData}"
---   if !problematicTheorems.isEmpty then
---     -- Build the "Try this:" suggestion
---     let checkCmd ← PrettyPrinter.ppCategory `command stx
---     let mut suggestion := Format.pretty checkCmd
---     suggestion := suggestion ++ "\n"
---     for declName in problematicTheorems do
---       suggestion := suggestion ++ s!"#grind_lint inspect {declName}\n"
---     Tactic.TryThis.addSuggestion stx { suggestion := .string suggestion }
 
+
+
+
+
+
+
+
+
+
+
+def myResolveGrindAttrs (ids : Array (TSyntax `ident)) : TermElabM (Array Lean.Meta.Grind.Extension) := do
+  let mut seen : NameSet := {}
+  let mut exts : Array Lean.Meta.Grind.Extension := #[]
+  for id in ids do
+    let attrName := id.getId
+    let some ext := (← Grind.getExtension? attrName) | throwError "unknown `grind` attribute `{attrName}`"
+    unless seen.contains attrName do
+      seen := seen.insert attrName
+      exts := exts.push ext
+  return exts
+
+def myMkParamsForAttrs (config : Grind.Config) (exts : Array Lean.Meta.Grind.Extension) : MetaM Params := do
+  let norm ← Grind.getSimpContext config
+  let normProcs ← Grind.getSimprocs
+  let symPrios ← Grind.getGlobalSymbolPriorities
+  let muted := myMuteExt.getState (← getEnv)
+  let mut extensions : Array Grind.ExtensionState := #[]
+  for ext in exts do
+    let mut s := ext.getState (← getEnv)
+    let mut ematch := s.ematch
+    for declName in muted do
+      try
+        ematch ← ematch.eraseDecl declName
+      catch _ =>
+        pure ()
+    extensions := extensions.push { s with ematch := ematch }
+  return { config, extensions, norm, normProcs, symPrios }
+
+def myFilterByPrefixInModule
+    (declName : Name) (prefixes? : Option (Array Name)) (inModule : Bool) : CoreM Bool := do
+  let some prefixes := prefixes? | return true
+  let env ← getEnv
+  if inModule then
+    let some modIdx := env.getModuleIdxFor? declName | return false
+    let modName := env.header.moduleNames[modIdx]!
+    return prefixes.any (fun pre => pre.isPrefixOf modName)
+  else
+    return prefixes.any fun pre =>
+      if pre == `_root_ then
+        declName.components.length == 1
+      else
+        pre.isPrefixOf declName
+
+def myGetTheoremsFromAttrs
+    (exts : Array Lean.Meta.Grind.Extension)
+    (prefixes? : Option (Array Name))
+    (inModule : Bool) : CoreM (Array Name) := do
+  let skip := mySkipExt.getState (← getEnv)
+  let skipSuffixes := mySkipSuffixExt.getState (← getEnv)
+  let mut seen : NameSet := {}
+  let mut names : Array Name := #[]
+  for ext in exts do
+    let origins := (← ext.getEMatchTheorems).getOrigins
+    for origin in origins do
+      match origin with
+      | .decl declName =>
+        unless seen.contains declName do
+          unless skip.contains declName || skipSuffixes.any (fun suff => nameEndsWithSuffix declName suff) do
+            if ← myFilterByPrefixInModule declName prefixes? inModule then
+              seen := seen.insert declName
+              names := names.push declName
+      | _ => pure ()
+  return names
+
+-- NOTE: your existing file already has #[command_elab Lean.Grind.grindAttrLintCheck] below this name.
+-- If you want this to be the active elaborator, replace that elaborator definition with this one.
 @[command_elab Lean.Grind.grindAttrLintCheck]
-def myElabGrindLintCheck : CommandElab := fun stx => liftTermElabM <| withTheReader Core.Context (fun c => { c with maxHeartbeats := 0 }) do
-  Tactic.TryThis.addSuggestion stx { suggestion := .string "hello" }
-  let `(#grind_attr_lint check $[$items:configItem]* $[$attrs:ident]* $[in $[module%$m?]? $ids?:ident*]?) := stx | throwUnsupportedSyntax
+def myElabGrindAttrLintCheckCore : CommandElab := fun stx => liftTermElabM <| withTheReader Core.Context (fun c => { c with maxHeartbeats := 0 }) do
+  let `(#grind_attr_lint check $[$items:configItem]* $[$attrs:ident]* $[in $[module%$m?]? $prefixes?:ident*]?) := stx | throwUnsupportedSyntax
   let config ← mkConfig items
-  let params ← mkParams config
-  let prefixes? := ids?.map (·.map (·.getId))
+  let attrExts ← myResolveGrindAttrs attrs.getElems
+  let params ← myMkParamsForAttrs config attrExts
+  let prefixes? : Option (Array Name) := prefixes?.map (·.map (·.getId))
   let inModule := m? matches some (some _)
-  let decls ← getTheorems prefixes? inModule
+
+  let decls ← myGetTheoremsFromAttrs attrExts prefixes? inModule
   let decls := decls.toArray.qsort Name.lt
+
   let mut problematicTheorems := #[]
   for declName in decls do
     try
@@ -175,13 +226,9 @@ def myElabGrindLintCheck : CommandElab := fun stx => liftTermElabM <| withTheRea
         problematicTheorems := problematicTheorems.push declName
     catch e =>
       logError m!"{declName} failed with {e.toMessageData}"
-  if !problematicTheorems.isEmpty then
-    -- Build the "Try this:" suggestion
-    let checkCmd ← PrettyPrinter.ppCategory `command stx
-    let mut suggestion := Format.pretty checkCmd
-    suggestion := suggestion ++ "\n"
-    for declName in problematicTheorems do
-      suggestion := suggestion ++ s!"#grind_lint inspect {declName}\n"
-    Tactic.TryThis.addSuggestion stx { suggestion := .string suggestion }
 
+  if !problematicTheorems.isEmpty then
+    logInfo m!"#grind_attr_lint check reported {problematicTheorems.size} potentially noisy theorem(s)."
+    for declName in problematicTheorems do
+      logInfo m!"  {declName}"
 end Lean.Elab.Tactic.Grind
