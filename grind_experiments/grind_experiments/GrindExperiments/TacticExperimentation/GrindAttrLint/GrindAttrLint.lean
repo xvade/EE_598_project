@@ -126,7 +126,10 @@ def analyzeEMatchTheorem (declName : Name) (params : Params) : MetaM Bool := do
     logInfo m!"{declName}\n{← thmsToMessageData thms}"
   return s > params.config.min
 
-
+/-
+Main controller for #grind_attr_lint inspect. Takes some syntax providing one or more theorems and
+a grind attribute and analyzes those theorems in the context of that attribute.
+-/
 @[command_elab grindAttrLintInspect]
 def elabGrindAttrLintInspectCore : CommandElab := fun stx => liftTermElabM <| withTheReader Core.Context (fun c => { c with maxHeartbeats := 0 }) do
   let `(#grind_attr_lint inspect $[$items:configItem]* $ids:ident* under $attr:ident) := stx | throwUnsupportedSyntax
@@ -147,7 +150,10 @@ def elabGrindAttrLintInspectCore : CommandElab := fun stx => liftTermElabM <| wi
           Tactic.TryThis.addSuggestion (header := "Try this to display the actual theorem instances:") stx { suggestion := .tsyntax s }
     | none   => throwError "unknown grind attribute {attr.getId}"
 
-
+/-
+Main controller for #grind_attr_lint check. Takes a grind attribute and analyzes each theorem in
+the attribut in the context of the rest of the theorems in the attribute. About the same as running `#grind_attr_lint inspect` on each theorem in the attribute.
+-/
 @[command_elab grindAttrLintCheck]
 def elabGrindAttrLintCheckCore : CommandElab := fun stx => liftTermElabM <| withTheReader Core.Context (fun c => { c with maxHeartbeats := 0 }) do
   let `(#grind_attr_lint check $[$items:configItem]* $attr:ident $[in $[module%$m?]? $ids?:ident*]?) := stx | throwUnsupportedSyntax
